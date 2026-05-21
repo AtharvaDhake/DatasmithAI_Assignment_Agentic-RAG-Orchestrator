@@ -11,6 +11,9 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from models import IntentLabel
+from models import ToolOutput
+from settings import Settings
+from unittest.mock import patch
 
 
 class TestIntentLabels:
@@ -50,6 +53,26 @@ class TestYouTubeURLDetection:
         from tools.youtube import _extract_video_id
         vid = _extract_video_id("https://www.youtube.com/watch?v=abc12345678&t=120")
         assert vid == "abc12345678"
+
+    @patch("tools.youtube.YouTubeTranscriptApi.get_transcripts", side_effect=Exception("primary fail"), create=True)
+    @patch("tools.youtube.YouTubeTranscriptApi.list_transcripts", side_effect=Exception("fallback fail"), create=True)
+    @patch("tools.youtube._download_audio_bytes", return_value=b"fakeaudio")
+    @patch("tools.audio.run")
+    def test_asr_fallback_used_when_enabled(self, mock_audio_run, mock_download, mock_list, mock_get):
+        from tools.youtube import run as youtube_run
+
+        # Configure settings to enable ASR fallback
+        s = Settings()
+        s.youtube_asr_fallback = True
+
+        with patch("tools.youtube.get_settings", return_value=s):
+            # audio.run should return a ToolOutput-like object
+            mock_audio_run.return_value = ToolOutput(extracted_text="transcribed audio text", result="transcribed audio text", intent=IntentLabel.AUDIO_TRANSCRIBE)
+
+            res = __import__("asyncio").run(youtube_run(query="https://youtu.be/dQw4w9WgXcQ"))
+
+            assert res.intent == IntentLabel.AUDIO_TRANSCRIBE or res.intent == IntentLabel.YOUTUBE_TRANSCRIPT
+            assert "transcribed audio text" in (res.extracted_text or res.result)
 
     @patch("tools.youtube.YouTubeTranscriptApi.get_transcripts", create=True)
     @patch("tools.youtube.YouTubeTranscriptApi.list_transcripts", create=True)

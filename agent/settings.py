@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     code_analysis_timeout: float = 25.0
     rag_query_timeout: float = 30.0
     youtube_fetch_timeout: float = 25.0
+    # If true, when a YouTube transcript is unavailable the agent will
+    # download the video's audio and attempt ASR transcription via the
+    # existing audio transcription pipeline (Whisper or Gemini fallback).
+    youtube_asr_fallback: bool = False
     summarization_timeout: float = 30.0
 
     max_retries: int = 3
