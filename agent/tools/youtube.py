@@ -26,12 +26,13 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
     logger.info(f"Extracted video ID: {video_id}")
 
     try:
+        api = YouTubeTranscriptApi()
         try:
-            segments = YouTubeTranscriptApi.get_transcript(
+            segments = api.fetch(
                 video_id, languages=["en", "en-US", "en-GB"]
             )
         except NoTranscriptFound:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            transcript_list = api.list(video_id)
             first_transcript = next(iter(transcript_list))
             segments = first_transcript.fetch()
 

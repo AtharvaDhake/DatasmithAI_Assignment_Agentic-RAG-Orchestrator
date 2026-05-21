@@ -42,6 +42,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadMenuRef = useRef<HTMLDivElement>(null);
   const uploadButtonRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -133,6 +134,8 @@ export default function Home() {
       document.documentElement.removeAttribute('data-theme');
     }
   }, [theme]);
+
+  // Automatic height adjustment removed to maintain stable text box size
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -340,31 +343,37 @@ export default function Home() {
                       </div>
                     )}
                     {msg.content && (
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          code(props) {
-                            const { children, className, node, ref, ...rest } = props as any;
-                            const match = /language-(\w+)/.exec(className || '');
-                            return match ? (
-                              <SyntaxHighlighter
-                                {...rest}
-                                PreTag="div"
-                                children={String(children).replace(/\n$/, '')}
-                                language={match[1]}
-                                style={theme === 'dark' ? vscDarkPlus : vs}
-                                customStyle={{ borderRadius: '8px', padding: '12px', fontSize: '0.9rem', margin: '10px 0' }}
-                              />
-                            ) : (
-                              <code {...rest} className={className}>
-                                {children}
-                              </code>
-                            );
-                          }
-                        }}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
+                      msg.role === 'user' ? (
+                        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit' }}>
+                          {msg.content}
+                        </div>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code(props) {
+                              const { children, className, node, ref, ...rest } = props as any;
+                              const match = /language-(\w+)/.exec(className || '');
+                              return match ? (
+                                <SyntaxHighlighter
+                                  {...rest}
+                                  PreTag="div"
+                                  children={String(children).replace(/\n$/, '')}
+                                  language={match[1]}
+                                  style={theme === 'dark' ? vscDarkPlus : vs}
+                                  customStyle={{ borderRadius: '8px', padding: '12px', fontSize: '0.9rem', margin: '10px 0' }}
+                                />
+                              ) : (
+                                <code {...rest} className={className}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      )
                     )}
                   </div>
                 )}
@@ -389,7 +398,7 @@ export default function Home() {
                   {expandedLogs.has(msg.id) && (
                     <div className="panel-content log-content">
                       {msg.executionLog.map((step, i) => (
-                        <div key={i} className="log-step">✓ {step}</div>
+                        <div key={i} className="log-step">{step}</div>
                       ))}
                     </div>
                   )}
@@ -486,6 +495,7 @@ export default function Home() {
           📎
         </button>
         <textarea
+          ref={textareaRef}
           className="chat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -501,13 +511,7 @@ export default function Home() {
           placeholder="Enter query or paste code (Shift+Enter for newline)..."
           disabled={isLoading}
           rows={1}
-          style={{ resize: 'none', overflowY: 'hidden', minHeight: '44px', padding: '12px 16px' }}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
-            if (target.scrollHeight > 200) target.style.overflowY = 'auto';
-          }}
+          style={{ resize: 'none', overflowY: 'auto' }}
         />
         <button type="submit" className="send-button" disabled={isLoading || (!input.trim() && !selectedFile)}>
           {isLoading ? '...' : 'SEND'}
