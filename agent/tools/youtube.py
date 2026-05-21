@@ -37,10 +37,10 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
                 segments = first_transcript.fetch()
             except Exception as fallback_err:
                 logger.debug(f"Fallback transcript fetch failed: {fallback_err}")
-                raise NoTranscriptFound([], []) from fallback_err
+                raise NoTranscriptFound(video_id, [], []) from fallback_err
 
         if not segments:
-            raise NoTranscriptFound([], [])
+            raise NoTranscriptFound(video_id, [], [])
 
         full_text = " ".join(
             (seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", ""))

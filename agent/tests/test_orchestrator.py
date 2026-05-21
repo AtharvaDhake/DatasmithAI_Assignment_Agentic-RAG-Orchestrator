@@ -5,6 +5,8 @@ These test the classify logic via mocked Gemini responses.
 import sys, os
 import pytest
 import json
+import asyncio
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -48,6 +50,19 @@ class TestYouTubeURLDetection:
         from tools.youtube import _extract_video_id
         vid = _extract_video_id("https://www.youtube.com/watch?v=abc12345678&t=120")
         assert vid == "abc12345678"
+
+    @patch("tools.youtube.YouTubeTranscriptApi.get_transcripts", create=True)
+    @patch("tools.youtube.YouTubeTranscriptApi.list_transcripts", create=True)
+    def test_transcript_fetch_failure_returns_friendly_message(self, mock_list_transcripts, mock_get_transcripts):
+        from tools.youtube import run as youtube_run
+
+        mock_get_transcripts.side_effect = Exception("Primary fetch failed")
+        mock_list_transcripts.side_effect = Exception("Fallback fetch failed")
+
+        result = asyncio.run(youtube_run(query="https://youtu.be/dQw4w9WgXcQ"))
+
+        assert result.intent == IntentLabel.YOUTUBE_TRANSCRIPT
+        assert result.result == "This video has no available transcript. The creator may have disabled captions."
 
 
 class TestToolMap:

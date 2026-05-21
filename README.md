@@ -10,30 +10,30 @@ http://13.60.78.68:3000/
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   Next.js Frontend (:3000)               │
-│           Chat UI + file upload + markdown render        │
+│                   Next.js Frontend (:3000)              │
+│           Chat UI + file upload + markdown render       │
 └───────────────────────┬─────────────────────────────────┘
                         │ POST /process (multipart form)
                         ▼
 ┌─────────────────────────────────────────────────────────┐
-│                 FastAPI Agent (:8000)                     │
-│                                                          │
-│  1. Parse file (PDF/image/audio) → extract text          │
-│  2. Classify intent via Gemini                           │
-│  3. Route to the right tool:                             │
-│     ┌──────────────┬──────────────┬──────────────┐       │
-│     │ summarize    │ sentiment    │ code_explain  │       │
-│     │ youtube      │ ocr/extract  │ audio_transcr │       │
-│     │ rag_qa       │ conversation │              │       │
-│     └──────────────┴──────────────┴──────────────┘       │
-│  4. Return result + execution log + extracted text       │
+│                 FastAPI Agent (:8000)                   │
+│                                                         │
+│  1. Parse file (PDF/image/audio) → extract text         │
+│  2. Classify intent via Gemini                          │
+│  3. Route to the right tool:                            │
+│     ┌──────────────┬──────────────┬──────────────┐      │
+│     │ summarize    │ sentiment    │ code_explain  │     │
+│     │ youtube      │ ocr/extract  │ audio_transcr │     │
+│     │ rag_qa       │ conversation │              │      |
+│     └──────────────┴──────────────┴──────────────┘      │
+│  4. Return result + execution log + extracted text      │
 └─────────────────┬───────────────────────────────────────┘
                   │ (only for rag_qa intent)
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│               Go Backend (:8081)                         │
+│               Go Backend (:8081)                        │
 │  embed query → pgvector search on Supabase → Gemini     │
-│  returns answer + page-level citations                   │
+│  returns answer + page-level citations                  │
 └─────────────────────────────────────────────────────────┘
 ```
 
