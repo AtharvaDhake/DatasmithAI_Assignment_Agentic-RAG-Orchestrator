@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   backend:
-    image: ${ECR_REGISTRY:-localhost}/rag-backend:latest
+    image: ${BACKEND_IMAGE:-localhost/rag-backend:latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -33,7 +33,7 @@ services:
       start_period: 25s
 
   agent:
-    image: ${ECR_REGISTRY:-localhost}/rag-agent:latest
+    image: ${AGENT_IMAGE:-localhost/rag-agent:latest}
     build:
       context: ./agent
       dockerfile: Dockerfile
@@ -67,7 +67,7 @@ services:
       start_period: 45s
 
   frontend:
-    image: ${ECR_REGISTRY:-localhost}/rag-frontend:latest
+    image: ${FRONTEND_IMAGE:-localhost/rag-frontend:latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
