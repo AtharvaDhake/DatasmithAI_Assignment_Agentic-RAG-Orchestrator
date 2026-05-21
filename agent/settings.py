@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     max_audio_size: int = 100 * 1024 * 1024
     max_image_size: int = 10 * 1024 * 1024
 
-    cors_origins: List[str] = ["https://localhost:3000"]
+    cors_origins: List[str] = ["*"]
 
     intent_classification_timeout: float = 15.0
     ocr_processing_timeout: float = 30.0
