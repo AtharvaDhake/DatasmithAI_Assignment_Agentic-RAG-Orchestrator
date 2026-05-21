@@ -84,7 +84,9 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Stop & remove existing containers
-        run: docker compose down --remove-orphans || true
+        run: |
+          docker compose down --remove-orphans || true
+          docker rm -f rag_backend rag_agent rag_frontend || true
 
       - name: Pull latest images from ECR
         env:
