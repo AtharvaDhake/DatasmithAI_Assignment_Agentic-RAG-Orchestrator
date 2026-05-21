@@ -10,11 +10,11 @@ WORKDIR /install
 
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir --upgrade pip \
+RUN pip install --no-cache-dir --upgrade pip "setuptools<82" wheel \
  && pip install --no-cache-dir \
     torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --no-build-isolation -r requirements.txt
 
 RUN python -c "import whisper; whisper.load_model('base')"
 
