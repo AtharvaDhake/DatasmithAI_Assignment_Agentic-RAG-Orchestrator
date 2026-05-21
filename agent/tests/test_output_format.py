@@ -2,6 +2,7 @@ import pytest
 import json
 from unittest.mock import AsyncMock, patch
 import re
+from models import AgentResponse
 
 @pytest.mark.asyncio
 @patch("httpx.AsyncClient.post")
@@ -32,10 +33,11 @@ Machine learning represents a paradigm shift in computing. It enables systems to
     }
     mock_post.return_value = mock_response
     
+    summary_text = mock_response.json.return_value["candidates"][0]["content"]["parts"][0]["text"]
     with patch("agent.run") as mock_run:
-        mock_run.return_value = AsyncMock(
+        mock_run.return_value = AgentResponse(
             response_type="answer",
-            result=mock_response.json()["candidates"][0]["content"]["parts"][0]["text"],
+            result=summary_text,
             extracted_text=None,
             execution_log=[],
             intent="summarize",
@@ -86,7 +88,7 @@ async def test_sentiment_output_format_compliance(mock_post, client):
     mock_post.return_value = mock_response
     
     with patch("agent.run") as mock_run:
-        mock_run.return_value = AsyncMock(
+        mock_run.return_value = AgentResponse(
             response_type="answer",
             result="**Sentiment: Positive** (Confidence: 87.0%)\n\nThe text uses uplifting language and expresses satisfaction.",
             extracted_text=None,
@@ -142,7 +144,7 @@ async def test_code_explain_output_format_compliance(mock_post, client):
     mock_post.return_value = mock_response
     
     with patch("agent.run") as mock_run:
-        mock_run.return_value = AsyncMock(
+        mock_run.return_value = AgentResponse(
             response_type="answer",
             result="**Language:** Python\n\n**Functional Description:**\nThis function performs a binary search on a sorted array. It recursively divides the search space in half.\n\n**Time Complexity:** O(log n) — binary search halves the search space each iteration\n**Space Complexity:** O(log n)\n\n**✅ No issues detected.",
             extracted_text=None,

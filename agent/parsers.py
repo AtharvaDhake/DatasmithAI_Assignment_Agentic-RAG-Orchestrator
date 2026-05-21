@@ -10,7 +10,7 @@ from config import GEMINI_JSON_URL
 
 logger = logging.getLogger(__name__)
 
-async def parse_pdf_with_fallback(file_bytes: bytes, query: str, settings) -> dict:
+async def parse_pdf_with_fallback(file_bytes: bytes, query: str, settings, execution_log: list = None) -> dict:
     result = {"text": "", "page_count": 0, "method": ""}
     
     try:
@@ -18,7 +18,9 @@ async def parse_pdf_with_fallback(file_bytes: bytes, query: str, settings) -> di
         page_texts = [page.get_text("text").rstrip() for page in doc if page.get_text("text").strip()]
         combined = "\n".join(page_texts).strip()
         
-        if len(combined) < 80:
+        if len(combined) < 5:
+            if execution_log is not None:
+                execution_log.append("Detected scanned PDF – running pytesseract OCR")
             logger.info("PDF appears scanned, attempting local OCR fallback...")
             ocr_parts = []
             for page in doc:
@@ -28,6 +30,8 @@ async def parse_pdf_with_fallback(file_bytes: bytes, query: str, settings) -> di
             combined = " ".join(ocr_parts).strip()
             result["method"] = "pdf_ocr"
         else:
+            if execution_log is not None:
+                execution_log.append("Extracted text directly from PDF pages")
             result["method"] = "pdf_text"
             
         result["text"] = combined
@@ -38,37 +42,62 @@ async def parse_pdf_with_fallback(file_bytes: bytes, query: str, settings) -> di
         logger.warning(f"Local PDF parsing failed: {e}")
         
     if not result["text"] or result["method"] == "pdf_ocr":
+        if execution_log is not None:
+            execution_log.append("Local extraction yielded little text, attempting Gemini multimodal fallback...")
         logger.info("Local extraction yielded little text, attempting Gemini multimodal fallback...")
         try:
             gemini_res = await _gemini_extract(file_bytes, "application/pdf", query, settings)
             if gemini_res.get("text"):
                 result["text"] = gemini_res["text"]
                 result["method"] = "gemini_multimodal"
+                if execution_log is not None:
+                    execution_log.append("Extracted text successfully using Gemini multimodal")
         except Exception as e:
             logger.error(f"Gemini fallback failed: {e}")
+            if execution_log is not None:
+                execution_log.append(f"Gemini fallback failed: {str(e)}")
             
     return result
 
-async def parse_image_with_fallback(file_bytes: bytes, query: str, settings) -> dict:
+async def parse_image_with_fallback(file_bytes: bytes, query: str, settings, execution_log: list = None) -> dict:
     result = {"text": "", "method": ""}
     
-    try:
-        gemini_res = await _gemini_extract(file_bytes, "image/jpeg", query, settings)
-        if gemini_res.get("text"):
-            result["text"] = gemini_res["text"]
-            result["method"] = "gemini_multimodal"
-            return result
-    except Exception as e:
-        logger.warning(f"Gemini image extraction failed: {e}")
+    if execution_log is not None:
+        execution_log.append("Detected image – running pytesseract OCR")
         
     try:
         logger.info("Falling back to local Tesseract OCR...")
         img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
         text = pytesseract.image_to_string(img).strip()
-        result["text"] = text
-        result["method"] = "image_ocr"
+        if text:
+            result["text"] = text
+            result["method"] = "image_ocr"
+            if execution_log is not None:
+                execution_log.append("Successfully extracted text using local Tesseract OCR")
+            return result
     except Exception as e:
         logger.error(f"Local OCR fallback failed: {e}")
+        err_msg = str(e)
+        if "tesseract is not installed" in err_msg.lower() or "no such file or directory" in err_msg.lower() or "executable file not found" in err_msg.lower() or "tesseract.exe" in err_msg.lower():
+            formatted_err = "Error: tesseract is not installed or it's not in your PATH. See README file for more information."
+        else:
+            formatted_err = f"Error: local OCR failed: {err_msg}"
+        if execution_log is not None:
+            execution_log.append(formatted_err)
+        
+    if not result["text"]:
+        logger.info("Local OCR yielded no text, attempting Gemini multimodal extraction...")
+        try:
+            gemini_res = await _gemini_extract(file_bytes, "image/jpeg", query, settings)
+            if gemini_res.get("text"):
+                result["text"] = gemini_res["text"]
+                result["method"] = "gemini_multimodal"
+                if execution_log is not None:
+                    execution_log.append("Extracted text successfully using Gemini multimodal")
+        except Exception as e:
+            logger.error(f"Gemini image extraction failed: {e}")
+            if execution_log is not None:
+                execution_log.append(f"Error: Gemini image extraction failed: {str(e)}")
         
     return result
 

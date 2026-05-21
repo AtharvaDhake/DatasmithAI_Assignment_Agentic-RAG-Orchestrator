@@ -2,6 +2,7 @@ import pytest
 import json
 from unittest.mock import AsyncMock, patch
 from io import BytesIO
+from models import ToolOutput, IntentLabel, IntentResult, AgentResponse
 
 @pytest.mark.asyncio
 async def test_clarification_gate_file_no_query(client):
@@ -57,8 +58,8 @@ async def test_valid_query_text_only(mock_intent, client):
     """
     Verifies that a valid text-only query proceeds to intent classification and execution.
     """
-    mock_intent.return_value = AsyncMock(
-        intent="conversational",
+    mock_intent.return_value = IntentResult(
+        intent=IntentLabel.CONVERSATIONAL,
         confidence=0.9,
         needs_clarification=False,
         reasoning="General greeting"
@@ -66,11 +67,11 @@ async def test_valid_query_text_only(mock_intent, client):
     
     with patch("agent.TOOL_MAP") as mock_tools:
         mock_tool = AsyncMock()
-        mock_tool.return_value = AsyncMock(
+        mock_tool.return_value = ToolOutput(
             result="Hello! How can I help?",
             extracted_text=None,
             execution_log=["Processed"],
-            intent="conversational",
+            intent=IntentLabel.CONVERSATIONAL,
             response_type="answer",
             metadata={}
         )
@@ -167,7 +168,7 @@ async def test_tools_endpoint():
 @pytest.mark.asyncio
 async def test_process_text_shortcut(client):
     with patch("agent.run") as mock_run:
-        mock_run.return_value = AsyncMock(
+        mock_run.return_value = AgentResponse(
             response_type="answer",
             result="Test response",
             extracted_text=None,

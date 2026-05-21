@@ -15,14 +15,6 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
             intent=IntentLabel.CONVERSATIONAL,
         )
 
-    history = kwargs.get("history", [])
-    history_lines = []
-    for msg in history[-6:]:
-        role = "User" if msg.get("role") == "user" else "Agent"
-        content = msg.get("content", "")
-        history_lines.append(f"{role}: {content}")
-    history_context = "\n".join(history_lines) if history_lines else "None"
-
     text_content = text.strip()
     if text_content:
         document_context = f"Document Context (Content of the uploaded file):\n{text_content}\n"
@@ -30,7 +22,6 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
         document_context = ""
 
     prompt = CONVERSATIONAL_PROMPT.format(
-        history_context=history_context,
         source=query.strip() or text.strip(),
         document_context=document_context
     )

@@ -40,7 +40,10 @@ class TestProcessEndpoint:
     async def test_empty_request_rejected(self, client):
         async with client as c:
             resp = await c.post("/process", data={"query": ""})
-            assert resp.status_code == 400
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["response_type"] == "clarification"
+            assert data["intent"] == "unclear"
 
     @pytest.mark.asyncio
     async def test_text_only_query(self, client):

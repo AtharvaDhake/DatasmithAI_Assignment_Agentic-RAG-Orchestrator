@@ -15,9 +15,6 @@ User query: "{query}"
 Extracted file content (first 600 chars): "{content_preview}"
 File type detected: "{file_type}"
 
-Recent Chat History:
-{history_context}
-
 Return valid JSON:
 {{
   "intent": "<one of: summarize | sentiment | code_explain | youtube_transcript | image_pdf_extract | audio_transcribe | rag_qa | conversational | unclear>",
@@ -68,14 +65,11 @@ CODE:
 
 CONVERSATIONAL_PROMPT = """\
 You are a helpful assistant.
-Answer the user's question concisely and clearly, keeping in mind the recent conversation history.
+Answer the user's question concisely and clearly.
 
 {document_context}
 
-Recent Conversation:
-{history_context}
-
-User's Current Question: {source}
+User's Question: {source}
 """
 
 SENTIMENT_PROMPT = """\

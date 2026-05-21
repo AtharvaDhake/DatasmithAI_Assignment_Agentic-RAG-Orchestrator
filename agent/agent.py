@@ -16,14 +16,11 @@ logger = logging.getLogger(__name__)
 
 async def _classify_intent(query: str, content_preview: str, file_type: str, history: list = None) -> IntentResult:
     settings = get_settings()
-    history_lines = [f"{'User' if msg.get('role') == 'user' else 'Agent'}: {msg.get('content', '')[:100]}" for msg in (history or [])[-6:]]
-    history_context = "\n".join(history_lines) if history_lines else "None"
 
     prompt = INTENT_PROMPT.format(
         query=query,
         content_preview=content_preview[:600] if content_preview else "none",
-        file_type=file_type or "none",
-        history_context=history_context
+        file_type=file_type or "none"
     )
 
     payload = {
@@ -72,6 +69,7 @@ async def _classify_intent(query: str, content_preview: str, file_type: str, his
 
 async def run(query: str, file: Optional[UploadFile] = None, history: str = "[]") -> AgentResponse:
     plan = ExecutionPlan(plan_description="Agent processing pipeline")
+    execution_log = []
     extracted_text = ""
     file_bytes = b""
     mime_type = ""
@@ -86,9 +84,12 @@ async def run(query: str, file: Optional[UploadFile] = None, history: str = "[]"
     file_is_present = file is not None
 
     if query_is_empty and file_is_present:
+        mime_type = file.content_type or ""
+        execution_log.append(f"File received: {file.filename} ({mime_type or 'unknown'}, 0KB)")
         return AgentResponse(
             response_type="clarification",
             result="I see you've uploaded a file. Please tell me what you'd like me to do with it.",
+            execution_log=execution_log,
             intent=IntentLabel.UNCLEAR.value,
             execution_plan=plan,
         )
@@ -96,6 +97,7 @@ async def run(query: str, file: Optional[UploadFile] = None, history: str = "[]"
         return AgentResponse(
             response_type="clarification",
             result="Please provide a query or upload a file.",
+            execution_log=execution_log,
             intent=IntentLabel.UNCLEAR.value,
             execution_plan=plan,
         )
@@ -103,30 +105,36 @@ async def run(query: str, file: Optional[UploadFile] = None, history: str = "[]"
     if file_is_present:
         mime_type = file.content_type or ""
         file_bytes = await file.read()
+        file_size_kb = len(file_bytes) // 1024
+        execution_log.append(f"File received: {file.filename} ({mime_type}, {file_size_kb}KB)")
 
         if mime_type == settings.allowed_pdf_type:
-            pdf_result = await parse_pdf_with_fallback(file_bytes, query, settings)
+            execution_log.append("Extracting text from image/PDF")
+            pdf_result = await parse_pdf_with_fallback(file_bytes, query, settings, execution_log)
             extracted_text = pdf_result.get("text", "")
         elif mime_type in settings.allowed_image_types:
-            img_result = await parse_image_with_fallback(file_bytes, query, settings)
+            execution_log.append("Extracting text from image/PDF")
+            img_result = await parse_image_with_fallback(file_bytes, query, settings, execution_log)
             extracted_text = img_result.get("text", "")
         elif mime_type in settings.allowed_audio_types:
+            execution_log.append("Extracting text from audio")
             audio_out = await audio_tool.run(file_bytes=file_bytes, file=file, query=query)
+            if hasattr(audio_out, "execution_log") and audio_out.execution_log:
+                execution_log.extend(audio_out.execution_log)
             return AgentResponse(
                 response_type="answer",
                 result=audio_out.result,
                 extracted_text=audio_out.extracted_text,
-                execution_log=audio_out.execution_log,
+                execution_log=execution_log,
                 intent=audio_out.intent.value,
                 metadata=audio_out.metadata,
                 execution_plan=plan,
             )
     else:
-        for msg in reversed(parsed_history):
-            if ext_text := (msg.get("extractedText") or msg.get("extracted_text")):
-                extracted_text = ext_text
-                break
+        # Context memory feature completely removed (do not carry forward extracted document text from past turns)
+        pass
 
+    execution_log.append("Classifying intent via Gemini")
     intent = await _classify_intent(
         query=query,
         content_preview=extracted_text,
@@ -134,15 +142,20 @@ async def run(query: str, file: Optional[UploadFile] = None, history: str = "[]"
         history=parsed_history
     )
 
+    execution_log.append(f"Intent: {intent.intent.value} (confidence: {intent.confidence:.2f}) – {intent.reasoning}")
+
     if intent.needs_clarification:
+        execution_log.append("Intent requires clarification")
         return AgentResponse(
             response_type="clarification",
             result=intent.clarification_question or "Could you clarify your request?",
             extracted_text=extracted_text or None,
+            execution_log=execution_log,
             intent=intent.intent.value,
             execution_plan=plan,
         )
 
+    execution_log.append(f"Dispatching to: {intent.intent.value}")
     tool_fn = TOOL_MAP.get(intent.intent, TOOL_MAP[IntentLabel.CONVERSATIONAL])
 
     try:
@@ -156,17 +169,23 @@ async def run(query: str, file: Optional[UploadFile] = None, history: str = "[]"
         )
     except Exception as e:
         logger.error(f"Tool error: {e}")
+        execution_log.append(f"Error: {str(e)}")
         return AgentResponse(
             response_type="answer",
             result=f"Processing error: {str(e)}",
+            execution_log=execution_log,
             intent=intent.intent.value,
             execution_plan=plan,
         )
+
+    if hasattr(tool_out, "execution_log") and tool_out.execution_log:
+        execution_log.extend(tool_out.execution_log)
 
     return AgentResponse(
         response_type=tool_out.response_type,
         result=tool_out.result,
         extracted_text=tool_out.extracted_text or (extracted_text or None),
+        execution_log=execution_log,
         intent=tool_out.intent.value,
         metadata=tool_out.metadata,
         execution_plan=plan,

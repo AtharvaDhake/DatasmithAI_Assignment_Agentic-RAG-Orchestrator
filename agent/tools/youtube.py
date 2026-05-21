@@ -27,16 +27,18 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
 
     try:
         try:
-            api = YouTubeTranscriptApi()
-            segments = api.fetch(
+            segments = YouTubeTranscriptApi.get_transcript(
                 video_id, languages=["en", "en-US", "en-GB"]
             )
         except NoTranscriptFound:
-            transcript_list = api.list(video_id)
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
             first_transcript = next(iter(transcript_list))
             segments = first_transcript.fetch()
 
-        full_text = " ".join(getattr(seg, "text", "") for seg in segments)
+        full_text = " ".join(
+            (seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", ""))
+            for seg in segments
+        )
         logger.info(f"Fetched transcript — {len(full_text.split())} words")
 
     except (NoTranscriptFound, TranscriptsDisabled):

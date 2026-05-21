@@ -73,7 +73,7 @@ def extract_pdf_bytes(file_bytes: bytes) -> dict:
     page_texts = [page.get_text("text").rstrip() for page in doc if page.get_text("text").strip()]
     combined = "\n".join(page_texts).strip()
 
-    if len(combined) < 80:
+    if len(combined) < 5:
         ocr_parts = []
         for page in doc:
             pix = page.get_pixmap(dpi=200)
@@ -98,7 +98,7 @@ async def run(file=None, file_bytes: bytes = b"", mime_type: str = "", query: st
     if mime_type == "application/pdf":
         try:
             info = extract_pdf_bytes(file_bytes)
-            if info["method"] == "pdf_ocr" or len(info["text"].strip()) < 80:
+            if info["method"] == "pdf_ocr" or len(info["text"].strip()) < 5:
                 try:
                     info = await ocr_via_gemini(file_bytes, mime_type, query)
                 except Exception:
