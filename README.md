@@ -2,6 +2,8 @@
 
 Multi-modal agentic app that takes in text, images, PDFs, audio files, or YouTube URLs — figures out what the user wants, and runs the right tool automatically. Built with FastAPI + Go + Next.js.
 
+# Agentic RAG Orchestraor Live On EC2 - http://13.60.78.68:3000/
+
 ## Architecture
 
 ```

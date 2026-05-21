@@ -9,4 +9,4 @@ pytesseract==0.3.13
 Pillow==10.4.0
 PyMuPDF==1.24.5
 openai-whisper==20231117
-youtube-transcript-api==0.6.2
+youtube-transcript-api==1.2.4
