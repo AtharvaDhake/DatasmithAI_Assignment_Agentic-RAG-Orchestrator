@@ -23,7 +23,17 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
         history_lines.append(f"{role}: {content}")
     history_context = "\n".join(history_lines) if history_lines else "None"
 
-    prompt = CONVERSATIONAL_PROMPT.format(history_context=history_context, source=source)
+    text_content = text.strip()
+    if text_content:
+        document_context = f"Document Context (Content of the uploaded file):\n{text_content}\n"
+    else:
+        document_context = ""
+
+    prompt = CONVERSATIONAL_PROMPT.format(
+        history_context=history_context,
+        source=query.strip() or text.strip(),
+        document_context=document_context
+    )
 
     payload = {
         "contents": [{
