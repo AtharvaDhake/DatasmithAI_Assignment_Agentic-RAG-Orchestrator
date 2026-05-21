@@ -26,14 +26,21 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
     logger.info(f"Extracted video ID: {video_id}")
 
     try:
+        segments = None
         try:
-            segments = YouTubeTranscriptApi.get_transcript(
-                video_id, languages=["en", "en-US", "en-GB"]
-            )
-        except NoTranscriptFound:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            first_transcript = next(iter(transcript_list))
-            segments = first_transcript.fetch()
+            segments = YouTubeTranscriptApi.get_transcripts([video_id], languages=["en", "en-US", "en-GB"]).get(video_id, [])
+        except Exception as e:
+            logger.debug(f"Primary transcript fetch failed: {e}")
+            try:
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                first_transcript = next(iter(transcript_list.manually_created_transcripts or transcript_list.generated_transcripts or []))
+                segments = first_transcript.fetch()
+            except Exception as fallback_err:
+                logger.debug(f"Fallback transcript fetch failed: {fallback_err}")
+                raise NoTranscriptFound(f"Could not fetch transcript for video {video_id}")
+
+        if not segments:
+            raise NoTranscriptFound(f"No transcript found for video {video_id}")
 
         full_text = " ".join(
             (seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", ""))
