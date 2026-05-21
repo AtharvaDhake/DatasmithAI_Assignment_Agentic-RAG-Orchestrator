@@ -1,0 +1,49 @@
+import httpx
+import logging
+from config import GEMINI_URL
+from models import IntentLabel, ToolOutput
+from prompts import CONVERSATIONAL_PROMPT
+
+logger = logging.getLogger(__name__)
+
+async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
+    source = query.strip() or text.strip()
+
+    if not source:
+        return ToolOutput(
+            result="Hello! I'm ready to help. You can ask me questions, upload files, or paste text.",
+            intent=IntentLabel.CONVERSATIONAL,
+        )
+
+    history = kwargs.get("history", [])
+    history_lines = []
+    for msg in history[-6:]:
+        role = "User" if msg.get("role") == "user" else "Agent"
+        content = msg.get("content", "")
+        history_lines.append(f"{role}: {content}")
+    history_context = "\n".join(history_lines) if history_lines else "None"
+
+    prompt = CONVERSATIONAL_PROMPT.format(history_context=history_context, source=source)
+
+    payload = {
+        "contents": [{
+            "parts": [{
+                "text": prompt
+            }]
+        }]
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(GEMINI_URL, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        answer = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        logger.error(f"Conversational generation error: {e}")
+        answer = f"I ran into an issue answering that: {e}"
+
+    return ToolOutput(
+        result=answer,
+        intent=IntentLabel.CONVERSATIONAL,
+    )

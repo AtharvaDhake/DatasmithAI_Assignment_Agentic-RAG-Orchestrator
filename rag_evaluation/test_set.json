@@ -1,0 +1,14 @@
+[
+    {
+        "question": "What are the three main functions of nutrients?",
+        "ground_truth": "The three main functions of nutrients are to provide energy, contribute to body structure, and regulate chemical processes in the body."
+    },
+    {
+        "question": "How do macronutrients differ from micronutrients?",
+        "ground_truth": "Macronutrients (carbohydrates, proteins, and fats) are required in large amounts and provide energy, while micronutrients (vitamins and minerals) are required in smaller amounts and are essential for various body functions."
+    },
+    {
+        "question": "What is the primary role of carbohydrates?",
+        "ground_truth": "The primary role of carbohydrates is to provide energy to the body, especially for the brain and nervous system."
+    }
+]
