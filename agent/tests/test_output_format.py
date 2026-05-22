@@ -1,5 +1,5 @@
 import pytest
-import json
+
 from unittest.mock import AsyncMock, patch
 import re
 from models import AgentResponse

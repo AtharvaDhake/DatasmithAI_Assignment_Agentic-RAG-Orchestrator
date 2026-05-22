@@ -4,7 +4,7 @@ Pytest fixtures and configuration for agent testing.
 
 import pytest
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 import sys
 

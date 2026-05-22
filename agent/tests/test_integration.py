@@ -1,5 +1,5 @@
 import pytest
-import json
+
 from unittest.mock import AsyncMock, patch
 from io import BytesIO
 from models import ToolOutput, IntentLabel, IntentResult, AgentResponse

@@ -3,13 +3,13 @@ Tests for the OCR tool — image and PDF extraction.
 Uses a small synthetic image so no external files needed.
 """
 import sys, os
-import pytest
+
 
 # make sure we can import from the agent directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from tools.ocr import extract_image_bytes, extract_pdf_bytes
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import io
 import fitz
 
