@@ -28,6 +28,7 @@ async def _get_yt_dlp_transcript(url: str) -> str | None:
         'writeautomaticsub': True,
         'subtitleslangs': ['en', 'en-US', 'en-GB'],
         'quiet': True,
+        'extractor_args': {'youtube': ['player_client=android,web']},
     }
     
     settings = get_settings()
@@ -89,6 +90,7 @@ async def _fallback_asr_transcription(url: str, query: str) -> ToolOutput:
         'format': 'bestaudio/best',
         'outtmpl': '%(id)s.%(ext)s',
         'quiet': True,
+        'extractor_args': {'youtube': ['player_client=android,web']},
     }
     if settings.youtube_cookiefile and os.path.exists(settings.youtube_cookiefile):
         ydl_opts['cookiefile'] = settings.youtube_cookiefile

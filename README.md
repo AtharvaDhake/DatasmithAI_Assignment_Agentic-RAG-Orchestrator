@@ -2,7 +2,7 @@
 
 Multi-modal agentic app that takes in text, images, PDFs, audio files, or YouTube URLs — figures out what the user wants, and runs the right tool automatically. Built with FastAPI + Go + Next.js.
 
-## Agentic RAG Orchestraor Live On EC2 
+## Agentic RAG Orchestrator Live On EC2 
 
 http://13.60.78.68:3000/
 
@@ -201,6 +201,7 @@ Response Type: clarification
    GEMINI_API_KEY=your_key
    SUPABASE_URL=your_supabase_url
    SUPABASE_SERVICE_ROLE_KEY=your_supabase_key
+   YOUTUBE_ASR_FALLBACK=true
    ```
 
 2. Build and run:
@@ -249,7 +250,7 @@ python -m pytest agent/tests/ -v
 
 ## Tech Stack
 
-- **Agent**: Python 3.13, FastAPI, Pydantic, httpx, PyMuPDF, pytesseract, OpenAI Whisper
+- **Agent**: Python 3.13, FastAPI, Pydantic, httpx, PyMuPDF, pytesseract, yt-dlp, OpenAI Whisper
 - **Backend**: Go 1.23, Supabase pgvector
 - **Frontend**: Next.js 16, React, react-markdown, react-syntax-highlighter
 - **LLM**: Gemini 3.1 Flash Lite (intent + tools), Gemini 2.5 Flash (audio transcription)

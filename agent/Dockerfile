@@ -27,11 +27,10 @@ RUN apt-get update \
     tesseract-ocr \
     ffmpeg \
     curl \
+    nodejs \
  && rm -rf /var/lib/apt/lists/*
 
-# Install Deno for yt-dlp EJS support (improves YouTube extraction)
-RUN curl -fsSL https://deno.land/x/install/install.sh | sh \
- && ln -s /root/.deno/bin/deno /usr/local/bin/deno || true
+
 
 COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
 COPY --from=builder /usr/local/bin             /usr/local/bin
