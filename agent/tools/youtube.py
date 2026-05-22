@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 import subprocess
+import httpx
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -16,11 +17,23 @@ _YT_RE = re.compile(
 
 
 def _download_audio_bytes(vid: str) -> bytes | None:
+    settings = get_settings()
+    cookiefile = settings.youtube_cookiefile
+
     # Try yt_dlp Python package first
     try:
         import yt_dlp
         with tempfile.TemporaryDirectory() as td:
-            ydl_opts = {"format": "bestaudio/best", "outtmpl": td + "/%(id)s.%(ext)s", "quiet": True}
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": td + "/%(id)s.%(ext)s",
+                "quiet": True,
+                "no_warnings": True,
+            }
+            if cookiefile and os.path.exists(cookiefile):
+                ydl_opts["cookiefile"] = cookiefile
+            if shutil.which("deno") is not None:
+                ydl_opts["jsruntimes"] = ["deno"]
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.extract_info(f"https://youtu.be/{vid}", download=True)
                 # find downloaded file
@@ -39,6 +52,10 @@ def _download_audio_bytes(vid: str) -> bytes | None:
     with tempfile.TemporaryDirectory() as td:
         out_path = os.path.join(td, f"{vid}.%(ext)s")
         cmd = [ytdlp_bin, "-f", "bestaudio", "-o", out_path, f"https://youtu.be/{vid}"]
+        if shutil.which("deno") is not None:
+            cmd.extend(["--js-runtimes", "deno"])
+        if cookiefile and os.path.exists(cookiefile):
+            cmd.extend(["--cookies", cookiefile])
         try:
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             # read first file in td
@@ -48,6 +65,32 @@ def _download_audio_bytes(vid: str) -> bytes | None:
                     return fh.read()
         except Exception:
             return None
+
+
+async def _generate_gemini_url_fallback(url: str) -> str:
+    settings = get_settings()
+    prompt = (
+        "A user asked for a summary of a public YouTube video. "
+        "Use any public knowledge you have to summarize the likely content of this video, "
+        "or explain that the transcript is unavailable and suggest providing audio or a transcript. "
+        f"Video URL: {url}"
+    )
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.youtube_fetch_timeout) as client:
+            resp = await client.post(settings.gemini_url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as e:
+        logger.error(f"Gemini URL fallback request failed: {e}")
+        raise
+
+    try:
+        return data["candidates"][0]["content"][0]["parts"][0]["text"].strip()
+    except Exception as e:
+        logger.error(f"Gemini URL fallback parsing failed: {e}")
+        raise ValueError("Failed to parse Gemini URL fallback response.") from e
 
 
 def _extract_video_id(text: str) -> str | None:
@@ -78,7 +121,6 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
                 segments = first_transcript.fetch()
             except Exception as fallback_err:
                 logger.debug(f"Fallback transcript fetch failed: {fallback_err}")
-                # If ASR fallback is enabled, attempt to download audio and transcribe
                 settings = get_settings()
                 if settings.youtube_asr_fallback:
                     logger.info("Attempting ASR fallback for YouTube video %s", video_id)
@@ -105,10 +147,36 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
                             return audio_out
                     except Exception as ex_asr:
                         logger.error(f"ASR fallback failed: {ex_asr}")
+
+                try:
+                    logger.info("Attempting Gemini URL fallback for YouTube video %s", video_id)
+                    gemini_text = await _generate_gemini_url_fallback(yt_url)
+                    if gemini_text:
+                        return ToolOutput(
+                            extracted_text=gemini_text,
+                            result=gemini_text,
+                            intent=IntentLabel.YOUTUBE_TRANSCRIPT,
+                            metadata={"video_id": video_id, "fallback": "gemini_url"},
+                        )
+                except Exception as ex_gemini:
+                    logger.error(f"Gemini URL fallback failed: {ex_gemini}")
+
                 # re-raise API exception with proper signature
                 raise NoTranscriptFound(video_id, [], []) from fallback_err
 
         if not segments:
+            logger.info("No transcript segments found; attempting Gemini URL fallback for %s", video_id)
+            try:
+                gemini_text = await _generate_gemini_url_fallback(yt_url)
+                if gemini_text:
+                    return ToolOutput(
+                        extracted_text=gemini_text,
+                        result=gemini_text,
+                        intent=IntentLabel.YOUTUBE_TRANSCRIPT,
+                        metadata={"video_id": video_id, "fallback": "gemini_url"},
+                    )
+            except Exception as ex_gemini:
+                logger.error(f"Gemini URL fallback failed: {ex_gemini}")
             raise NoTranscriptFound(video_id, [], [])
 
         full_text = " ".join(

@@ -6,14 +6,13 @@ import sys, os
 import pytest
 import json
 import asyncio
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from models import IntentLabel
 from models import ToolOutput
 from settings import Settings
-from unittest.mock import patch
 
 
 class TestIntentLabels:
@@ -73,6 +72,22 @@ class TestYouTubeURLDetection:
 
             assert res.intent == IntentLabel.AUDIO_TRANSCRIBE or res.intent == IntentLabel.YOUTUBE_TRANSCRIPT
             assert "transcribed audio text" in (res.extracted_text or res.result)
+
+    @patch("tools.youtube.YouTubeTranscriptApi.get_transcripts", side_effect=Exception("primary fail"), create=True)
+    @patch("tools.youtube.YouTubeTranscriptApi.list_transcripts", side_effect=Exception("fallback fail"), create=True)
+    @patch("tools.youtube._generate_gemini_url_fallback", new_callable=AsyncMock)
+    def test_gemini_url_fallback_used_when_transcript_missing(self, mock_gemini_fallback, mock_list_transcripts, mock_get_transcripts):
+        from tools.youtube import run as youtube_run
+
+        mock_gemini_fallback.return_value = "Gemini URL fallback summary"
+        s = Settings()
+        s.youtube_asr_fallback = False
+
+        with patch("tools.youtube.get_settings", return_value=s):
+            result = asyncio.run(youtube_run(query="https://youtu.be/dQw4w9WgXcQ"))
+
+        assert result.intent == IntentLabel.YOUTUBE_TRANSCRIPT
+        assert "Gemini URL fallback summary" in result.result
 
     @patch("tools.youtube.YouTubeTranscriptApi.get_transcripts", create=True)
     @patch("tools.youtube.YouTubeTranscriptApi.list_transcripts", create=True)
