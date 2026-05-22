@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # download the video's audio and attempt ASR transcription via the
     # existing audio transcription pipeline (Whisper or Gemini fallback).
     youtube_asr_fallback: bool = False
+    # Optional path to a cookies file to pass to yt-dlp for authenticated YouTube downloads
+    # Example: /run/secrets/youtube_cookies.txt or /home/user/youtube_cookies.txt
+    youtube_cookiefile: Optional[str] = None
     summarization_timeout: float = 30.0
 
     max_retries: int = 3
