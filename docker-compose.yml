@@ -45,6 +45,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - GO_BACKEND_URL=http://backend:8081
+      - YOUTUBE_ASR_FALLBACK=${YOUTUBE_ASR_FALLBACK:-false}
     depends_on:
       backend:
         condition: service_healthy

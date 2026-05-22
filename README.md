@@ -22,8 +22,8 @@ http://13.60.78.68:3000/
 │  2. Classify intent via Gemini                          │
 │  3. Route to the right tool:                            │
 │     ┌──────────────┬──────────────┬──────────────┐      │
-│     │ summarize    │ sentiment    │ code_explain │     │
-│     │ youtube      │ ocr/extract  │ audio_transcr│     │
+│     │ summarize    │ sentiment    │ code_explain │      │
+│     │ youtube      │ ocr/extract  │ audio_transcr│      │
 │     │ rag_qa       │ conversation │              │      |
 │     └──────────────┴──────────────┴──────────────┘      │
 │  4. Return result + execution log + extracted text      │

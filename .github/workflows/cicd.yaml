@@ -98,10 +98,11 @@ jobs:
 
       - name: Write .env file on EC2
         run: |
-          printf 'GEMINI_API_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_ROLE_KEY=%s\n' \
+          printf 'GEMINI_API_KEY=%s\nSUPABASE_URL=%s\nSUPABASE_SERVICE_ROLE_KEY=%s\nYOUTUBE_ASR_FALLBACK=%s\n' \
             '${{ secrets.GEMINI_API_KEY }}' \
             '${{ secrets.SUPABASE_URL }}' \
-            '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' > .env
+            '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}' \
+            '${{ secrets.YOUTUBE_ASR_FALLBACK || "false" }}' > .env
 
       - name: Start containers via Docker Compose
         env:
