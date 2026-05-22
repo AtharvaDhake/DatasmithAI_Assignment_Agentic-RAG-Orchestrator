@@ -2,12 +2,6 @@ import re
 import logging
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 from models import IntentLabel, ToolOutput
-import os
-import shutil
-import tempfile
-import subprocess
-import httpx
-from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,86 +10,10 @@ _YT_RE = re.compile(
 )
 
 
-def _download_audio_bytes(vid: str) -> bytes | None:
-    settings = get_settings()
-    cookiefile = settings.youtube_cookiefile
-
-    # Try yt_dlp Python package first
-    try:
-        import yt_dlp
-        with tempfile.TemporaryDirectory() as td:
-            ydl_opts = {
-                "format": "bestaudio/best",
-                "outtmpl": td + "/%(id)s.%(ext)s",
-                "quiet": True,
-                "no_warnings": True,
-            }
-            if cookiefile and os.path.exists(cookiefile):
-                ydl_opts["cookiefile"] = cookiefile
-            if shutil.which("deno") is not None:
-                ydl_opts["jsruntimes"] = ["deno"]
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.extract_info(f"https://youtu.be/{vid}", download=True)
-                # find downloaded file
-                for f in os.listdir(td):
-                    if f.startswith(vid):
-                        path = os.path.join(td, f)
-                        with open(path, "rb") as fh:
-                            return fh.read()
-    except Exception:
-        pass
-
-    # Fallback to system yt-dlp binary
-    ytdlp_bin = shutil.which("yt-dlp") or shutil.which("yt-dl")
-    if not ytdlp_bin:
-        return None
-    with tempfile.TemporaryDirectory() as td:
-        out_path = os.path.join(td, f"{vid}.%(ext)s")
-        cmd = [ytdlp_bin, "-f", "bestaudio", "-o", out_path, f"https://youtu.be/{vid}"]
-        if shutil.which("deno") is not None:
-            cmd.extend(["--js-runtimes", "deno"])
-        if cookiefile and os.path.exists(cookiefile):
-            cmd.extend(["--cookies", cookiefile])
-        try:
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            # read first file in td
-            for f in os.listdir(td):
-                path = os.path.join(td, f)
-                with open(path, "rb") as fh:
-                    return fh.read()
-        except Exception:
-            return None
-
-
-async def _generate_gemini_url_fallback(url: str) -> str:
-    settings = get_settings()
-    prompt = (
-        "A user asked for a summary of a public YouTube video. "
-        "Use any public knowledge you have to summarize the likely content of this video, "
-        "or explain that the transcript is unavailable and suggest providing audio or a transcript. "
-        f"Video URL: {url}"
-    )
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        async with httpx.AsyncClient(timeout=settings.youtube_fetch_timeout) as client:
-            resp = await client.post(settings.gemini_url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        logger.error(f"Gemini URL fallback request failed: {e}")
-        raise
-
-    try:
-        return data["candidates"][0]["content"][0]["parts"][0]["text"].strip()
-    except Exception as e:
-        logger.error(f"Gemini URL fallback parsing failed: {e}")
-        raise ValueError("Failed to parse Gemini URL fallback response.") from e
-
-
 def _extract_video_id(text: str) -> str | None:
     m = _YT_RE.search(text)
     return m.group(1) if m else None
+
 
 async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
     yt_url = query + " " + (text or "")
@@ -107,98 +25,43 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
             intent=IntentLabel.YOUTUBE_TRANSCRIPT,
         )
 
-    logger.info(f"Extracted video ID: {video_id}")
+    logger.info("Extracted video ID: %s", video_id)
+    yt = YouTubeTranscriptApi()
 
+    transcript = None
     try:
-        segments = None
+        transcript = yt.fetch(video_id, languages=["en", "en-US", "en-GB"])
+    except Exception as primary_err:
+        logger.debug("Primary transcript fetch failed for %s: %s", video_id, primary_err)
         try:
-            segments = YouTubeTranscriptApi.get_transcripts([video_id], languages=["en", "en-US", "en-GB"]).get(video_id, [])
-        except Exception as e:
-            logger.debug(f"Primary transcript fetch failed: {e}")
-            try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                first_transcript = next(iter(transcript_list.manually_created_transcripts or transcript_list.generated_transcripts or []))
-                segments = first_transcript.fetch()
-            except Exception as fallback_err:
-                logger.debug(f"Fallback transcript fetch failed: {fallback_err}")
-                settings = get_settings()
-                if settings.youtube_asr_fallback:
-                    logger.info("Attempting ASR fallback for YouTube video %s", video_id)
-                    try:
-                        # lazy import of audio tool to avoid heavy deps at module import
-                        from tools.audio import run as audio_run
+            transcript_list = yt.list(video_id)
+            transcript = transcript_list.find_transcript(["en", "en-US", "en-GB"]).fetch()
+        except Exception as fallback_err:
+            logger.warning("Transcript unavailable for %s: %s / %s", video_id, primary_err, fallback_err)
+            return ToolOutput(
+                result="This video has no available transcript. The creator may have disabled captions.",
+                intent=IntentLabel.YOUTUBE_TRANSCRIPT,
+            )
 
-                        audio_bytes = _download_audio_bytes(video_id)
-                        if audio_bytes:
-                            audio_out = audio_run(file_bytes=audio_bytes, query=query or "transcribe youtube audio")
-                            # audio_run may be async or sync; handle both
-                            import asyncio
-                            if asyncio.iscoroutine(audio_out):
-                                audio_out = await audio_out
-                            # cache transcript to simple file cache
-                            try:
-                                cache_dir = os.path.join(os.path.dirname(__file__), "..", ".cache")
-                                os.makedirs(cache_dir, exist_ok=True)
-                                cache_path = os.path.join(cache_dir, f"{video_id}.txt")
-                                with open(cache_path, "w", encoding="utf-8") as cf:
-                                    cf.write(audio_out.extracted_text or audio_out.result or "")
-                            except Exception:
-                                pass
-                            return audio_out
-                    except Exception as ex_asr:
-                        logger.error(f"ASR fallback failed: {ex_asr}")
-
-                try:
-                    logger.info("Attempting Gemini URL fallback for YouTube video %s", video_id)
-                    gemini_text = await _generate_gemini_url_fallback(yt_url)
-                    if gemini_text:
-                        return ToolOutput(
-                            extracted_text=gemini_text,
-                            result=gemini_text,
-                            intent=IntentLabel.YOUTUBE_TRANSCRIPT,
-                            metadata={"video_id": video_id, "fallback": "gemini_url"},
-                        )
-                except Exception as ex_gemini:
-                    logger.error(f"Gemini URL fallback failed: {ex_gemini}")
-
-                # re-raise API exception with proper signature
-                raise NoTranscriptFound(video_id, [], []) from fallback_err
-
-        if not segments:
-            logger.info("No transcript segments found; attempting Gemini URL fallback for %s", video_id)
-            try:
-                gemini_text = await _generate_gemini_url_fallback(yt_url)
-                if gemini_text:
-                    return ToolOutput(
-                        extracted_text=gemini_text,
-                        result=gemini_text,
-                        intent=IntentLabel.YOUTUBE_TRANSCRIPT,
-                        metadata={"video_id": video_id, "fallback": "gemini_url"},
-                    )
-            except Exception as ex_gemini:
-                logger.error(f"Gemini URL fallback failed: {ex_gemini}")
-            raise NoTranscriptFound(video_id, [], [])
-
-        full_text = " ".join(
-            (seg.get("text", "") if isinstance(seg, dict) else getattr(seg, "text", ""))
-            for seg in segments
-        )
-        logger.info(f"Fetched transcript — {len(full_text.split())} words")
-
-    except (NoTranscriptFound, TranscriptsDisabled):
-        logger.warning("Transcript unavailable")
+    if not transcript:
         return ToolOutput(
             result="This video has no available transcript. The creator may have disabled captions.",
             intent=IntentLabel.YOUTUBE_TRANSCRIPT,
         )
-    except Exception as e:
-        logger.error(f"Error fetching transcript: {e}")
+
+    full_text = " ".join(
+        (item.get("text") if isinstance(item, dict) else getattr(item, "text", ""))
+        for item in transcript
+    ).strip()
+
+    if not full_text:
         return ToolOutput(
-            result=f"Could not fetch transcript: {str(e)}",
+            result="This video has no available transcript. The creator may have disabled captions.",
             intent=IntentLabel.YOUTUBE_TRANSCRIPT,
         )
 
-    if len(full_text.split()) > 200:
+    word_count = len(full_text.split())
+    if word_count > 200:
         from tools.summarize import run as do_summary
         logger.info("Transcript long — applying summarization")
         summary_out = await do_summary(text=full_text, query=query or "summarize this video")
@@ -206,12 +69,12 @@ async def run(query: str = "", text: str = "", **kwargs) -> ToolOutput:
             extracted_text=full_text,
             result=summary_out.result,
             intent=IntentLabel.YOUTUBE_TRANSCRIPT,
-            metadata={"video_id": video_id, "word_count": len(full_text.split())},
+            metadata={"video_id": video_id, "word_count": word_count},
         )
 
     return ToolOutput(
         extracted_text=full_text,
         result=full_text,
         intent=IntentLabel.YOUTUBE_TRANSCRIPT,
-        metadata={"video_id": video_id, "word_count": len(full_text.split())},
+        metadata={"video_id": video_id, "word_count": word_count},
     )
