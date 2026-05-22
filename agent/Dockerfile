@@ -35,7 +35,7 @@ RUN curl -fsSL https://deno.land/x/install/install.sh | sh \
 
 COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
 COPY --from=builder /usr/local/bin             /usr/local/bin
-COPY --from=builder /root/.cache               /root/.cache
+COPY --from=builder --chown=1001:1001 /root/.cache /home/appuser/.cache
 
 COPY agent.py       ./
 COPY main.py        ./

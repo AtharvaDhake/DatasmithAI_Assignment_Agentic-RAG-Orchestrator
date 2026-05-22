@@ -81,6 +81,7 @@ export default function Home() {
 
   const playSound = (type: 'send' | 'receive' | 'typing') => {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
@@ -268,6 +269,7 @@ export default function Home() {
             : msg
         )
       );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       playSound('receive');
       setMessages(prev =>
@@ -352,17 +354,19 @@ export default function Home() {
                           remarkPlugins={[remarkGfm]}
                           components={{
                             code(props) {
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
                               const { children, className, node, ref, ...rest } = props as any;
                               const match = /language-(\w+)/.exec(className || '');
                               return match ? (
                                 <SyntaxHighlighter
                                   {...rest}
                                   PreTag="div"
-                                  children={String(children).replace(/\n$/, '')}
                                   language={match[1]}
                                   style={theme === 'dark' ? vscDarkPlus : vs}
                                   customStyle={{ borderRadius: '8px', padding: '12px', fontSize: '0.9rem', margin: '10px 0' }}
-                                />
+                                >
+                                  {String(children).replace(/\n$/, '')}
+                                </SyntaxHighlighter>
                               ) : (
                                 <code {...rest} className={className}>
                                   {children}
@@ -504,6 +508,7 @@ export default function Home() {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               if (input.trim() || selectedFile) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 handleSubmit(e as any);
               }
             }
